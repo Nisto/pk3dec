@@ -24,12 +24,15 @@ static inline void UPDATE_FLAGS(uint8_t dest, REG_VF *vf)
           case 0:
             MAC.UL = (MAC.UL & ~(0x1000<<shift)) | (0x0101<<shift);
             vf->UL[i] = s;
+            break;
           case 255:
             MAC.UL = (MAC.UL & ~(0x0100<<shift)) | (0x1000<<shift);
             vf->UL[i] = s|0x7f7fffff; /* max allowed */
+            break;
           default:
             MAC.UL = (MAC.UL & ~(0x1101<<shift));
             vf->UL[i] = v;
+            break;
         }
       }
     } else {
