@@ -1,36 +1,36 @@
 typedef struct {
-	union {
-		float    F;
-		int32_t  SL;
-		uint32_t UL;
-		int16_t  SS[2];
-		uint16_t US[2];
-		int8_t   SC[4];
-		uint8_t  UC[4];
-	};
-	uint32_t padding[3]; // needs padding to make them 128bit; VU0 maps VU1's VI regs as 128bits to addr 0x4xx0 in
+  union {
+    float    F;
+    int32_t  SL;
+    uint32_t UL;
+    int16_t  SS[2];
+    uint16_t US[2];
+    int8_t   SC[4];
+    uint8_t  UC[4];
+  };
+  uint32_t padding[3]; // needs padding to make them 128bit; VU0 maps VU1's VI regs as 128bits to addr 0x4xx0 in
                        // VU0 mem, with only lower 16 bits valid, and the upper 112bits are hardwired to 0
 } REG_VI;
 
 typedef union {
-	struct {
-		float x,y,z,w;
-	} f;
+  struct {
+    float x,y,z,w;
+  } f;
 
-	struct {
-		uint32_t x,y,z,w;
-	} i;
+  struct {
+    uint32_t x,y,z,w;
+  } i;
 
-	float     F[4];      // float
+  float     F[4];      // float
 
-	uint64_t UD[2];      // unsigned double
-	int64_t  SD[2];      // signed double
-	uint32_t UL[4];      // unsigned long
-	int32_t  SL[4];      // signed long
-	uint16_t US[8];      // unsigned short
-	int16_t  SS[8];      // signed short
-	uint8_t  UC[16];     // unsigned char
-	int8_t   SC[16];     // signed char
+  uint64_t UD[2];      // unsigned double
+  int64_t  SD[2];      // signed double
+  uint32_t UL[4];      // unsigned long
+  int32_t  SL[4];      // signed long
+  uint16_t US[8];      // unsigned short
+  int16_t  SS[8];      // signed short
+  uint8_t  UC[16];     // unsigned char
+  int8_t   SC[16];     // signed char
 } VECTOR;
 
 typedef VECTOR REG_VF;

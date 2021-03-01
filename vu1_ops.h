@@ -2,7 +2,7 @@
 
 static inline void UPDATE_FLAGS(uint8_t dest, REG_VF *vf)
 {
-	int status = 0;
+  int status = 0;
 
   for (int i = 0; i < 4; i++) {
     int shift = 3 - i;
@@ -37,12 +37,12 @@ static inline void UPDATE_FLAGS(uint8_t dest, REG_VF *vf)
     }
   }
 
-	if (MAC.UL & 0x000F) status |= 0x1;
-	if (MAC.UL & 0x00F0) status |= 0x2;
-	if (MAC.UL & 0x0F00) status |= 0x4;
-	if (MAC.UL & 0xF000) status |= 0x8;
+  if (MAC.UL & 0x000F) status |= 0x1;
+  if (MAC.UL & 0x00F0) status |= 0x2;
+  if (MAC.UL & 0x0F00) status |= 0x4;
+  if (MAC.UL & 0xF000) status |= 0x8;
 
-	STATUS.UL = (STATUS.UL & 0xC30) | status | ((STATUS.UL & 0xF) << 6);
+  STATUS.UL = (STATUS.UL & 0xC30) | status | ((STATUS.UL & 0xF) << 6);
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -445,7 +445,7 @@ static inline void MTIR(REG_VI *it, REG_VF *fs, uint8_t fsf)
 
 static inline void IADDI(REG_VI *it, REG_VI *is, uint16_t imm5)
 {
-	it->SS[0] = is->SS[0] + (int16_t)((imm5 & 0x10 ? 0xfff0 : 0) | (imm5 & 0xf));
+  it->SS[0] = is->SS[0] + (int16_t)((imm5 & 0x10 ? 0xfff0 : 0) | (imm5 & 0xf));
 }
 
 static inline void IADDIU(REG_VI *it, REG_VI *is, uint16_t imm15)
