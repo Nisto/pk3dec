@@ -118,23 +118,92 @@ int huff_init_tables(uint8_t *buf)
   return offset;
 }
 
-int16_t huff_out[2][1024] = { 0 };
+typedef struct {
+  uint32_t huff_cfg_tbl_off;
+  uint32_t unk04;
+  uint16_t loop_frame;
+  uint16_t unk0A;
+  uint16_t frame_count;
+  uint16_t unk0E;
+  uint32_t loop_offset;
+  uint32_t file_size;
+  uint8_t joint_stereo;
+} pk3_header_t;
+
+void get_pk3_header(pk3_header_t *header, uint8_t *buffer)
+{
+  header->huff_cfg_tbl_off = get_u32_le(buffer+0x00);
+  header->unk04            = get_u32_le(buffer+0x04);
+  header->loop_frame       = get_u16_le(buffer+0x08);
+  header->unk0A            = get_u16_le(buffer+0x0A);
+  header->frame_count      = get_u16_le(buffer+0x0C);
+  header->unk0E            = get_u16_le(buffer+0x0E);
+  header->loop_offset      = get_u32_le(buffer+0x10);
+  header->file_size        = get_u32_le(buffer+0x14);
+  header->joint_stereo     =            buffer[0x18];
+}
+
+#define NUM_CHANNELS 2
 
 /* the VU1 routines always output 1024 samples */
 
 #define NUM_SAMPLES_OUT 1024
 
-int16_t pcm16[NUM_SAMPLES_OUT][2] = { 0 };
+int16_t huff_out[NUM_CHANNELS][NUM_SAMPLES_OUT] = { 0 };
 
-void decode_frame(FILE *wavfile, uint8_t *ptr, uint16_t flag, uint32_t xor_value)
+int16_t pcm16[NUM_SAMPLES_OUT][NUM_CHANNELS] = { 0 };
+
+inline int16_t clamp16(int32_t n)
+{
+  if (n < -32768) {
+    return -32768;
+  } else if (n > 32767) {
+    return 32767;
+  }
+  return (int16_t) n;
+}
+
+/* based on StMakeFinalOut */
+void finalize_output(pk3_header_t *header/*, int type*/)
+{
+  int start_sample = 0;
+  int num_samples = NUM_SAMPLES_OUT;
+
+  // skipping this for now, more research needed
+  /* if (type == 1) { // when looping over
+    start_sample = header->unk0A;
+    num_samples = NUM_SAMPLES_OUT - header->unk0A;
+  } else if (type == 2) { // when?
+    start_sample = 0;
+    num_samples = header->unk0E + 1;
+  } else {
+    start_sample = 0;
+    num_samples = NUM_SAMPLES_OUT;
+  } */
+
+  if (header->joint_stereo) {
+    for (int i = start_sample; num_samples > 0; i++, num_samples--) {
+      int16_t smp_l = clamp16(pcm16[i][0] + pcm16[i][1]);
+      int16_t smp_r = clamp16(pcm16[i][0] - pcm16[i][1]);
+      pcm16[i][0] = smp_l;
+      pcm16[i][1] = smp_r;
+    }
+  } else {
+    /* currently unnecessary */
+    /* for (int i = start_sample; num_samples > 0; i++, num_samples--) {
+    } */
+  }
+}
+
+void decode_frame(pk3_header_t *header, uint8_t *ptr, uint16_t huff_flag, uint32_t huff_cfg)
 {
   uint32_t unkA = 0;
-  uint32_t unkB = xor_value;
+  uint32_t unkB = huff_cfg;
   uint32_t unkC = 0;
   uint32_t unkD = 0xFFFFFFFF;
   uint32_t unkT = 0; // temp
 
-  for (int ch = 0; ch < 2; ch++) {
+  for (int ch = 0; ch < NUM_CHANNELS; ch++) {
     int huff_done = 0;
     int huff_todo = 28;
     int16_t huff_val = 0;
@@ -184,7 +253,7 @@ void decode_frame(FILE *wavfile, uint8_t *ptr, uint16_t flag, uint32_t xor_value
       }
 
       if (huff_done < 28) {
-        if (flag) {
+        if (huff_flag) {
           huff_val += huff_table_2[ch][huff_done];
         }
 
@@ -199,23 +268,26 @@ void decode_frame(FILE *wavfile, uint8_t *ptr, uint16_t flag, uint32_t xor_value
     }
 
     s32 = vu1_decode(huff_out[ch], huff_done, ch);
+
     for (int i = 0; i < NUM_SAMPLES_OUT; i++) {
       pcm16[i][ch] = *(int16_t*)(&s32[i]);
     }
   }
 
-  if (sizeof(pcm16) != fwrite(pcm16, 1, sizeof(pcm16), wavfile)) {
-    printf("fwrite failed!\n");
-    exit(EXIT_FAILURE);
-  }
+  finalize_output(header);
 }
 
 int decode_file(FILE *wavfile, uint8_t *buf, long bufsize)
 {
   /* parse file header */
 
-  long offset = get_u32_le(buf+0x00);
-  uint16_t frame_count = get_u16_le(buf+0x0C);
+  pk3_header_t header;
+  long offset;
+  uint16_t frame_count;
+
+  get_pk3_header(&header, buf);
+  offset = header.huff_cfg_tbl_off;
+  frame_count = header.frame_count;
 
   /* parse initialization table */
 
@@ -234,11 +306,11 @@ int decode_file(FILE *wavfile, uint8_t *buf, long bufsize)
       uint16_t size       = get_u16_le(buf+offset+0x02) & 0x7FFF;
       uint16_t frame_id   = get_u16_le(buf+offset+0x04);
       uint16_t huff_count = get_u16_le(buf+offset+0x06); /* huffman decoded length in 16-bit units */
-      uint32_t xor_value  = get_u32_be(buf+offset+0x08);
+      uint32_t huff_cfg   = get_u32_be(buf+offset+0x08);
 
       printf(
-        "i=0x%04X  flag=%d  offset=0x%08X  size=0x%04X  frame_id=0x%04X  huff_count=0x%04X  xor_value=0x%08X\n",
-        i, flag, offset, size, frame_id, huff_count, xor_value
+        "i=0x%04X  flag=%d  offset=0x%08X  size=0x%04X  frame_id=0x%04X  huff_count=0x%04X  huff_cfg=0x%08X\n",
+        i, flag, offset, size, frame_id, huff_count, huff_cfg
       );
 
       if (frame_id != i) {
@@ -257,7 +329,12 @@ int decode_file(FILE *wavfile, uint8_t *buf, long bufsize)
           exit(EXIT_FAILURE);
         }
 
-        decode_frame(wavfile, buf+offset+0x0C, flag, xor_value);
+        decode_frame(&header, buf+offset+0x0C, flag, huff_cfg);
+
+        if (sizeof(pcm16) != fwrite(pcm16, 1, sizeof(pcm16), wavfile)) {
+          printf("failed writing decoded frame!\n");
+          exit(EXIT_FAILURE);
+        }
 
         offset += 0x08+size;
       } else {
